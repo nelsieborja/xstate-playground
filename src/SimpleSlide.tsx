@@ -1,5 +1,4 @@
 import React, {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -11,71 +10,83 @@ interface Props {
   visible: boolean;
 }
 
-const SimpleSlide: React.FC<Props> = ({
-  children,
-  visible,
-  style,
-  ...rest
-}) => {
+const defaultStyle = {
+  style: { height: "0", overflow: "hidden" }
+};
+
+const SimpleSlide: React.FC<Props> = ({ children, visible, ...rest }) => {
   const el: any = useRef(null);
   const [open, setOpen] = useState(visible);
-  const [height, setHeight] = useState("0");
-  const [overflow, setOverflow] = useState("hidden");
-
-  const styleProp = useMemo(
-    () => ({
-      height,
-      overflow,
-      transition: "height .3s ease-in-out",
-      ...style
-    }),
-    [height, overflow, style]
-  );
-
-  const openCallback = useCallback(() => {
-    if (el.current) {
-      setHeight(el.current.scrollHeight);
-      setOverflow("hidden");
-    }
-  }, []);
-
-  const onTransitionEndHandler = useCallback(() => {
-    setOpen(visible);
-    setHeight(visible ? "" : "0");
-    setOverflow(visible ? "" : "hidden");
-  }, [visible]);
+  const [dynamicProps, setDynamicProps] = useState<{
+    onTransitionEnd?: any;
+    style: { [K: string]: any };
+  }>(defaultStyle);
 
   // Open
   useEffect(() => {
     if (open) {
-      openCallback();
+      setDynamicProps({
+        onTransitionEnd: () => {
+          setDynamicProps({
+            style: {
+              height: "",
+              overflow: ""
+            }
+          });
+        },
+        style: {
+          height: el.current.scrollHeight,
+          overflow: "hidden"
+        }
+      });
     }
-  }, [open, openCallback]);
+  }, [open]);
 
   // Close
   useEffect(() => {
-    if (!visible && el.current && height === el.current.scrollHeight) {
-      setHeight("0");
+    if (
+      !visible &&
+      el.current &&
+      dynamicProps.style.height === el.current.scrollHeight
+    ) {
+      setDynamicProps({
+        onTransitionEnd: () => {
+          setOpen(false);
+        },
+        ...defaultStyle
+      });
     }
-  }, [visible, height]);
+  }, [visible, open, dynamicProps.style.height]);
 
   useLayoutEffect(() => {
     if (visible) {
       setOpen(true);
     } else {
-      openCallback();
+      if (el.current) {
+        setDynamicProps({
+          style: {
+            height: el.current.scrollHeight,
+            overflow: "hidden"
+          }
+        });
+      }
     }
-  }, [visible, openCallback]);
+  }, [visible, open]);
+
+  const { style: dynamicPropsStyle, ...dynamicPropsRest } = dynamicProps;
+
+  const style = useMemo(
+    () => ({ transition: "height .3s ease-in-out", ...dynamicPropsStyle }),
+    [dynamicPropsStyle]
+  );
 
   return (
     <>
+      visible: {visible.toString()}
+      <br />
+      open: {open.toString()}
       {open && (
-        <div
-          onTransitionEnd={onTransitionEndHandler}
-          ref={el}
-          style={styleProp}
-          {...rest}
-        >
+        <div ref={el} style={style} {...dynamicPropsRest} {...rest}>
           {children}
         </div>
       )}
